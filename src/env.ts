@@ -10,13 +10,17 @@ export const env = {
   WEB_PANEL_PASSWORD: process.env.WEB_PANEL_PASSWORD ?? "",
   WEB_PANEL_PORT: Number(process.env.PORT ?? process.env.WEB_PANEL_PORT ?? "3000") || 3000,
   WEB_PANEL_HOST: process.env.WEB_PANEL_HOST ?? (process.env.PORT ? "0.0.0.0" : "127.0.0.1"),
-  /** Dirección pública del panel (para el botón de /ms). Si está vacía, usa localhost */
-  WEB_PANEL_URL: process.env.WEB_PANEL_URL ?? "",
+  /** Dirección pública del panel (para el botón de /ms). Render inyecta RENDER_EXTERNAL_URL automáticamente */
+  WEB_PANEL_URL: process.env.WEB_PANEL_URL ?? process.env.RENDER_EXTERNAL_URL ?? "",
 };
 
 /** URL que se muestra/abre desde Discord (el botón de /ms). */
 export function panelUrl(): string {
-  return env.WEB_PANEL_URL || `http://localhost:${env.WEB_PANEL_PORT}`;
+  let url = env.WEB_PANEL_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${env.WEB_PANEL_PORT}`;
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  return url.endsWith("/") ? url : `${url}/`;
 }
 
 /** Devuelve la lista de variables obligatorias que faltan. */
