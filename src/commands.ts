@@ -6,6 +6,7 @@ import { Monitor } from "./monitor.js";
 import { adapters } from "./platforms/index.js";
 import { Store } from "./store.js";
 import { cleanHandle, detectPlatformFromInput, parseColor, PLATFORM_EMOJI, PLATFORM_LABEL, platformUrl, timeAgo } from "./util.js";
+import { createPanelAuthToken } from "./web/server.js";
 import type { GuildConfig, Platform, Streamer } from "./types.js";
 
 const PLATFORM_CHOICES = [
@@ -416,15 +417,10 @@ async function cmdCheck(interaction: Interaction, monitor: Monitor): Promise<voi
 
 async function cmdPanel(interaction: Interaction): Promise<void> {
   if (!interaction.isChatInputCommand()) return;
-  if (!env.WEB_PANEL_PASSWORD) {
-    await interaction.reply({
-      content:
-        "❌ El panel está desactivado. Define `WEB_PANEL_PASSWORD` en `.env` (y `WEB_PANEL_URL` con tu dirección pública) y reinicia el bot.",
-      ephemeral: true,
-    });
-    return;
-  }
-  const url = panelUrl();
+  const base = panelUrl();
+  const token = createPanelAuthToken();
+  const directUrl = `${base}${base.includes("?") ? "&" : "?"}auth=${token}`;
+
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle("🛠 Panel de gestión · Gremio Estelar")
@@ -433,12 +429,22 @@ async function cmdPanel(interaction: Interaction): Promise<void> {
         "• Añadir/quitar streamers (también en lote, pegando URLs)\n" +
         "• Elegir el canal global de avisos y el canal propio de cada streamer\n" +
         "• Roles live/offline, pings, colores y mensajes por streamer\n" +
-        "• Historial de directos y comprobaciones manuales",
+        "• Historial de directos y comprobaciones manuales\n\n" +
+        "⚡ **Acceso con 1 clic**: Usa el botón de abajo para entrar directamente al panel sin tener que escribir la contraseña.",
     )
-    .addFields({ name: "🔗 Enlace", value: url })
-    .setFooter({ text: "Solo administradores · te pedirá la contraseña del panel" });
+    .addFields(
+      { name: "🔗 Enlace del panel", value: base },
+      {
+        name: "🔑 Contraseña del panel",
+        value: env.WEB_PANEL_PASSWORD
+          ? `||${env.WEB_PANEL_PASSWORD}|| *(toca para revelar)*`
+          : "*(Sin contraseña requerida)*",
+      },
+    )
+    .setFooter({ text: "Solo administradores · Este mensaje es efímero (solo tú lo ves)" });
+
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("🌐 Abrir el panel").setURL(url),
+    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("🌐 Abrir el panel (Acceso directo)").setURL(directUrl),
   );
   await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 }

@@ -127,7 +127,7 @@ async function readBody(req: IncomingMessage, limit = 1_000_000): Promise<string
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function serveStatic(res: ServerResponse, pathname: string): void {
+function serveStatic(res: ServerResponse, pathname: string, extraHeaders?: Record<string, string>): void {
   let name = pathname === "/" ? "index.html" : pathname.slice(1);
   try {
     name = decodeURIComponent(name);
@@ -142,18 +142,32 @@ function serveStatic(res: ServerResponse, pathname: string): void {
   try {
     const file = readFileSync(join(STATIC_DIR, name));
     const ext = name.slice(name.lastIndexOf(".")) || ".html";
-    res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-cache" });
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] ?? "application/octet-stream",
+      "Cache-Control": "no-cache",
+      ...extraHeaders,
+    });
     res.end(file);
   } catch {
     sendJson(res, 404, { error: "No encontrado" });
   }
 }
 
+let authKey: Buffer = createHmac("sha256", "gremio-estelar-panel-salt")
+  .update(env.WEB_PANEL_PASSWORD || "gremio-estelar-panel-salt-default")
+  .digest();
+
+/** Genera un token firmado para que el botón de Discord entre directamente sin pedir contraseña. */
+export function createPanelAuthToken(): string {
+  return makeToken(authKey);
+}
+
 export function startWebServer(client: Client, store: Store, monitor: Monitor): void {
   const hasPanelPassword = Boolean(env.WEB_PANEL_PASSWORD);
-  const key = hasPanelPassword
-    ? createHmac("sha256", "gremio-estelar-panel-salt").update(env.WEB_PANEL_PASSWORD).digest()
-    : Buffer.alloc(32);
+  authKey = createHmac("sha256", "gremio-estelar-panel-salt")
+    .update(env.WEB_PANEL_PASSWORD || "gremio-estelar-panel-salt-default")
+    .digest();
+  const key = authKey;
   const expectedPw = hasPanelPassword
     ? createHmac("sha256", "gremio-estelar-pw-check").update(env.WEB_PANEL_PASSWORD).digest()
     : Buffer.alloc(32);
@@ -174,45 +188,29 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
       return;
     }
 
-    // Si no hay contraseña configurada para el panel, servimos una pantalla de estado básica
-    if (!hasPanelPassword) {
-      if (url.pathname === "/" && method === "GET") {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(`<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Bot Online 24/7</title>
-  <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: #1e293b; padding: 2rem 3rem; border-radius: 12px; border: 1px solid #334155; text-align: center; max-width: 480px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
-    .status { display: inline-flex; align-items: center; gap: 8px; color: #22c55e; font-weight: bold; font-size: 1.1rem; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e; }
-    p { color: #94a3b8; line-height: 1.5; font-size: 0.95rem; }
-    code { background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #38bdf8; font-family: monospace; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="status"><span class="dot"></span> Bot en línea 24/7</div>
-    <h2>Gremio Estelar Bot</h2>
-    <p>El servicio web está activo y respondiendo a los pings de <strong>UptimeRobot</strong> / <strong>Render</strong>.</p>
-    <p><small>Para activar el panel de gestión web, añade la variable <code>WEB_PANEL_PASSWORD</code>.</small></p>
-  </div>
-</body>
-</html>`);
-        return;
-      }
-      sendJson(res, 404, { error: "Panel web desactivado (WEB_PANEL_PASSWORD no configurada)" });
-      return;
-    }
-
     const cookies = parseCookies(req);
-    const authed = verifyToken(key, cookies[COOKIE_NAME]);
+    const queryToken = url.searchParams.get("auth") || url.searchParams.get("token");
+    let cookieToSet: string | null = null;
+    let authed = !hasPanelPassword;
+
+    if (!authed) {
+      if (queryToken && verifyToken(key, queryToken)) {
+        authed = true;
+        cookieToSet = queryToken;
+      } else {
+        authed = verifyToken(key, cookies[COOKIE_NAME]);
+      }
+    }
 
     // ── Autenticación ───────────────────────────────────────
     if (url.pathname === "/api/auth/status" && method === "GET") {
-      sendJson(res, 200, { authenticated: authed });
+      if (cookieToSet) {
+        res.setHeader(
+          "Set-Cookie",
+          `${COOKIE_NAME}=${cookieToSet}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+        );
+      }
+      sendJson(res, 200, { authenticated: authed, noPassword: !hasPanelPassword });
       return;
     }
     if (url.pathname === "/api/login" && method === "POST") {
@@ -305,7 +303,11 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
 
     // ── Estáticos ───────────────────────────────────────────
     if (method === "GET") {
-      serveStatic(res, url.pathname);
+      const extraHeaders: Record<string, string> = {};
+      if (cookieToSet) {
+        extraHeaders["Set-Cookie"] = `${COOKIE_NAME}=${cookieToSet}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
+      }
+      serveStatic(res, url.pathname, extraHeaders);
       return;
     }
     sendJson(res, 405, { error: "Método no permitido" });
