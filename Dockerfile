@@ -1,20 +1,31 @@
 # ---- Build ----
-FROM node:20-slim AS build
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
+
+# Instalar herramientas para compilar módulos nativos (better-sqlite3)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci
+
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
+# Dejar solo las dependencias de producción compiladas
+RUN npm prune --omit=dev
+
 # ---- Runtime ----
-FROM node:20-slim
+FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY web ./web
 
