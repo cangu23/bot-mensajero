@@ -80,6 +80,11 @@ async function getUser(login: string): Promise<TwitchUser | null> {
   return user;
 }
 
+export async function getTwitchAvatar(channel: string): Promise<string | null> {
+  const user = await getUser(channel.toLowerCase());
+  return user?.profile_image_url ?? null;
+}
+
 export const twitch: PlatformAdapter = {
   platform: "twitch",
 

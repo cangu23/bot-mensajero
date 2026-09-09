@@ -315,3 +315,18 @@ export const youtube: PlatformAdapter = {
     }
   },
 };
+
+export async function getYoutubeAvatar(channel: string): Promise<string | null> {
+  try {
+    const channelUrl = CHANNEL_ID_RE.test(channel)
+      ? `https://www.youtube.com/channel/${channel}`
+      : `https://www.youtube.com/@${channel.replace(/^@/, "")}`;
+    const res = await httpGet(channelUrl);
+    if (!res.ok) return null;
+    const match = res.body.match(/<meta property="og:image" content="([^"]+)"/i)
+      || res.body.match(/"avatar":\s*\{\s*"thumbnails":\s*\[\s*\{\s*"url":\s*"([^"]+)"/);
+    return match && match[1] ? match[1].replace(/&amp;/g, "&") : null;
+  } catch {
+    return null;
+  }
+}

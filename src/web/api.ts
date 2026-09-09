@@ -3,6 +3,9 @@ import { env, twitchConfigured } from "../env.js";
 import { log } from "../logger.js";
 import { Monitor } from "../monitor.js";
 import { adapters } from "../platforms/index.js";
+import { getTwitchAvatar } from "../platforms/twitch.js";
+import { getKickAvatar } from "../platforms/kick.js";
+import { getYoutubeAvatar } from "../platforms/youtube.js";
 import { applyOffline } from "../roles.js";
 import { Store } from "../store.js";
 import { cleanHandle, detectPlatformFromInput, parseColor, platformUrl } from "../util.js";
@@ -21,6 +24,28 @@ export interface ApiContext {
 const PLATFORMS: Platform[] = ["twitch", "youtube", "kick"];
 const NAME_TTL_MS = 30_000;
 const nameCache = new Map<string, { value: string | null; exp: number }>();
+
+const avatarCache = new Map<string, { url: string; exp: number }>();
+
+export async function resolveAvatar(platform: Platform, channel: string): Promise<string | null> {
+  const key = `${platform}:${channel.toLowerCase()}`;
+  const hit = avatarCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.url;
+
+  let url: string | null = null;
+  try {
+    if (platform === "twitch") url = await getTwitchAvatar(channel);
+    else if (platform === "kick") url = await getKickAvatar(channel);
+    else if (platform === "youtube") url = await getYoutubeAvatar(channel);
+  } catch {
+    url = null;
+  }
+
+  if (url) {
+    avatarCache.set(key, { url, exp: Date.now() + 4 * 3600 * 1000 });
+  }
+  return url;
+}
 
 async function cachedName(key: string, loader: () => Promise<string | null>): Promise<string | null> {
   const hit = nameCache.get(key);
@@ -145,22 +170,32 @@ async function apiGetConfig(ctx: ApiContext): Promise<void> {
   const guild = await resolveGuild(ctx);
   if (!guild) return;
   const cfg = ctx.store.getGuild(guild.id);
-  const streamers: unknown[] = [];
-  for (const s of cfg.streamers) {
-    const st = ctx.store.getState(s.id);
-    streamers.push({
-      ...s,
-      url: platformUrl(s.platform, s.channel),
-      live: st.isLive,
-      liveTitle: st.title,
-      startedAt: st.startedAt,
-      notifyChannelName: s.notifyChannelId ? await resolveChannelName(guild, s.notifyChannelId) : null,
-      discordUserName: s.discordUserId ? await resolveMemberName(guild, s.discordUserId) : null,
-      mentionRoleName: s.mentionRoleId ? await resolveRoleName(guild, s.mentionRoleId) : null,
-      liveRoleName: s.liveRoleId ? await resolveRoleName(guild, s.liveRoleId) : null,
-      offlineRoleName: s.offlineRoleId ? await resolveRoleName(guild, s.offlineRoleId) : null,
-    });
-  }
+  const streamers = await Promise.all(
+    cfg.streamers.map(async (s) => {
+      const st = ctx.store.getState(s.id);
+      let avatarUrl = avatarCache.get(`${s.platform}:${s.channel.toLowerCase()}`)?.url ?? null;
+      if (!avatarUrl) {
+        try {
+          avatarUrl = await resolveAvatar(s.platform, s.channel);
+        } catch {
+          avatarUrl = null;
+        }
+      }
+      return {
+        ...s,
+        avatarUrl: avatarUrl ?? `/api/avatar?platform=${s.platform}&channel=${encodeURIComponent(s.channel)}`,
+        url: platformUrl(s.platform, s.channel),
+        live: st.isLive,
+        liveTitle: st.title,
+        startedAt: st.startedAt,
+        notifyChannelName: s.notifyChannelId ? await resolveChannelName(guild, s.notifyChannelId) : null,
+        discordUserName: s.discordUserId ? await resolveMemberName(guild, s.discordUserId) : null,
+        mentionRoleName: s.mentionRoleId ? await resolveRoleName(guild, s.mentionRoleId) : null,
+        liveRoleName: s.liveRoleId ? await resolveRoleName(guild, s.liveRoleId) : null,
+        offlineRoleName: s.offlineRoleId ? await resolveRoleName(guild, s.offlineRoleId) : null,
+      };
+    }),
+  );
   ctx.sendJson(200, {
     guild: { id: guild.id, name: guild.name },
     config: {

@@ -21,6 +21,16 @@ interface KickChannel {
 const apiUrl = (slug: string) => `https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
 const url = (slug: string) => `https://kick.com/${encodeURIComponent(slug)}`;
 
+export async function getKickAvatar(channel: string): Promise<string | null> {
+  try {
+    const slug = channel.trim().toLowerCase().replace(/^@/, "");
+    const r = await jsonGet<KickChannel>(apiUrl(slug));
+    return r.data?.user?.profile_pic ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Kick no tiene API oficial pública; este endpoint público no documentado
  * se usa ampliamente por la comunidad. Puede cambiar o limitarse: si eso

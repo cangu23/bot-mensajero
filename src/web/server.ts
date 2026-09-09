@@ -8,7 +8,7 @@ import { env } from "../env.js";
 import { log } from "../logger.js";
 import type { Monitor } from "../monitor.js";
 import type { Store } from "../store.js";
-import { handleApi } from "./api.js";
+import { handleApi, resolveAvatar } from "./api.js";
 
 const STATIC_DIR = join(fileURLToPath(new URL("../../web", import.meta.url)));
 const STATIC_FILES = new Set(["index.html", "style.css", "app.js", "favicon.svg"]);
@@ -185,6 +185,31 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
       });
+      return;
+    }
+
+    // ── Endpoint de avatares (con redirección 302 y caché en navegador) ──
+    if (url.pathname === "/api/avatar" && method === "GET") {
+      const platform = url.searchParams.get("platform");
+      const channel = url.searchParams.get("channel");
+      if (!platform || !channel) {
+        sendJson(res, 400, { error: "Faltan parámetros platform y channel" });
+        return;
+      }
+      try {
+        const avatarUrl = await resolveAvatar(platform as any, channel);
+        if (avatarUrl) {
+          res.writeHead(302, {
+            Location: avatarUrl,
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200",
+          });
+          res.end();
+          return;
+        }
+      } catch (e) {
+        log("⚠️ Error al resolver avatar:", e instanceof Error ? e.message : String(e));
+      }
+      sendJson(res, 404, { error: "Avatar no disponible" });
       return;
     }
 

@@ -549,12 +549,19 @@ main {
   font-size: 1.35rem;
   flex-shrink: 0;
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.streamer-card:hover .streamer-avatar {
+  transform: scale(1.06);
 }
 .avatar-img {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+  display: block;
 }
 .streamer-name-group {
   display: flex;

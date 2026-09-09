@@ -263,10 +263,26 @@ function renderStreamers() {
 
     const avatar = document.createElement("div");
     avatar.className = "streamer-avatar";
-    avatar.textContent = PLATFORM_EMOJI[s.platform];
     const colorHex = s.color ? `#${s.color.toString(16).padStart(6, "0")}` : PLATFORM_COLOR[s.platform];
     avatar.style.borderColor = colorHex;
     avatar.style.background = `${colorHex}18`;
+
+    const avatarSrc = s.avatarUrl || `/api/avatar?platform=${s.platform}&channel=${encodeURIComponent(s.channel)}`;
+    const img = document.createElement("img");
+    img.className = "avatar-img";
+    img.src = avatarSrc;
+    img.alt = s.displayName || s.channel;
+    img.loading = "lazy";
+    img.onerror = () => {
+      img.style.display = "none";
+      if (!avatar.querySelector(".avatar-fallback")) {
+        const fallback = document.createElement("span");
+        fallback.className = "avatar-fallback";
+        fallback.textContent = PLATFORM_EMOJI[s.platform] || "📡";
+        avatar.appendChild(fallback);
+      }
+    };
+    avatar.appendChild(img);
 
     const nameGroup = document.createElement("div");
     nameGroup.className = "streamer-name-group";
