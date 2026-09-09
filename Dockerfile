@@ -1,6 +1,7 @@
 # ---- Build ----
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
@@ -12,17 +13,18 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
+RUN apk add --no-cache libstdc++ \
+  && apk add --no-cache --virtual .build-deps python3 make g++
+
 COPY package*.json ./
-# better-sqlite3 necesita las build tools para compilar nativamente en Alpine
-RUN apk add --no-cache python3 make g++ \
-  && npm ci --omit=dev \
+RUN npm ci --omit=dev \
   && npm cache clean --force \
-  && apk del python3 make g++
+  && apk del .build-deps
 
 COPY --from=build /app/dist ./dist
 COPY web ./web
 
-# El volumen de Fly se monta en /data
+RUN mkdir -p /data
 ENV DATA_FILE=/data/store.db
 VOLUME ["/data"]
 
