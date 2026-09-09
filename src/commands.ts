@@ -1,4 +1,4 @@
-import { ActionRowBuilder, AutocompleteInteraction, ButtonBuilder, ButtonStyle, ChannelType, Client, EmbedBuilder, Interaction, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { ActionRowBuilder, AutocompleteInteraction, ButtonBuilder, ButtonStyle, ChannelType, Client, EmbedBuilder, Interaction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { applyOffline } from "./roles.js";
 import { env, panelUrl, twitchConfigured } from "./env.js";
 import { log } from "./logger.js";

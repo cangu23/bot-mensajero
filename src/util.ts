@@ -75,3 +75,41 @@ export function cleanHandle(raw: string, platform: Platform): string {
   s = s.replace(/^[^/]+\//, "").replace(/\/.*$/, "");
   return s.replace(/^@/, "");
 }
+
+export function formatDuration(startIso: string | undefined | null, endIso?: string | undefined | null): string {
+  if (!startIso) return "—";
+  const start = new Date(startIso).getTime();
+  if (Number.isNaN(start)) return "—";
+  const end = endIso ? new Date(endIso).getTime() : Date.now();
+  const diffSec = Math.max(0, Math.floor((end - start) / 1000));
+  const hours = Math.floor(diffSec / 3600);
+  const minutes = Math.floor((diffSec % 3600) / 60);
+  if (hours > 0) {
+    return `${hours} h ${minutes} min`;
+  }
+  return `${Math.max(1, minutes)} min`;
+}
+
+export function replacePlaceholders(
+  template: string,
+  streamer: { displayName: string; channel: string; platform: Platform; discordUserId?: string | null },
+  snap?: { url?: string; title?: string | null; category?: string | null; viewers?: number },
+): string {
+  return template
+    .replace(/\{streamer\}/gi, streamer.displayName)
+    .replace(/\{channel\}/gi, streamer.channel)
+    .replace(/\{canal\}/gi, streamer.channel)
+    .replace(/\{platform\}/gi, PLATFORM_LABEL[streamer.platform])
+    .replace(/\{plataforma\}/gi, PLATFORM_LABEL[streamer.platform])
+    .replace(/\{url\}/gi, snap?.url ?? platformUrl(streamer.platform, streamer.channel))
+    .replace(/\{link\}/gi, snap?.url ?? platformUrl(streamer.platform, streamer.channel))
+    .replace(/\{enlace\}/gi, snap?.url ?? platformUrl(streamer.platform, streamer.channel))
+    .replace(/\{title\}/gi, snap?.title ?? "")
+    .replace(/\{titulo\}/gi, snap?.title ?? "")
+    .replace(/\{category\}/gi, snap?.category ?? "")
+    .replace(/\{categoria\}/gi, snap?.category ?? "")
+    .replace(/\{game\}/gi, snap?.category ?? "")
+    .replace(/\{juego\}/gi, snap?.category ?? "")
+    .replace(/\{user\}/gi, streamer.discordUserId ? `<@${streamer.discordUserId}>` : streamer.displayName)
+    .replace(/\{usuario\}/gi, streamer.discordUserId ? `<@${streamer.discordUserId}>` : streamer.displayName);
+}
