@@ -1,0 +1,48 @@
+# fly.toml — Configuración de Fly.io para el bot de notificaciones
+# Documentación: https://fly.io/docs/reference/configuration/
+
+app = "gremio-estelar-bot"   # <-- cambia esto si ese nombre ya está tomado
+primary_region = "mia"        # Miami (más cercano a LATAM). Otras opciones: eze (Buenos Aires), scl (Santiago)
+
+[build]
+  dockerfile = "Dockerfile"
+
+# ── Máquina ────────────────────────────────────────────────────────────────
+# shared-cpu-1x con 256 MB RAM es suficiente y entra en el free tier
+[vm]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+# ── Proceso ────────────────────────────────────────────────────────────────
+# auto_stop_machines = false → la máquina nunca se apaga (importante para el bot)
+[machines]
+  auto_start_machines = true
+  auto_stop_machines = false  # sin esto, Fly apaga la VM si no hay tráfico HTTP
+
+# ── Panel web (opcional) ───────────────────────────────────────────────────
+# Descomenta si quieres exponer el panel en https://gremio-estelar-bot.fly.dev
+[[services]]
+  protocol = "tcp"
+  internal_port = 3000
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.http_checks]
+    interval = "30s"
+    timeout  = "5s"
+    # Health check: el panel responde 401 (no autenticado) lo cual es OK
+    path     = "/api/auth/status"
+
+# ── Volumen persistente ─────────────────────────────────────────────────────
+# El volumen guarda store.db entre reinicios y deploys.
+# Se crea con: fly volumes create bot_data --size 1 --region mia
+[[mounts]]
+  source      = "bot_data"
+  destination = "/data"

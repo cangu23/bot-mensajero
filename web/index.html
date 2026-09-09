@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gremio Estelar · Panel de Configuración</title>
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- Fondo con degradado ambiental -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <!-- Pantalla de Login -->
+  <div id="login" class="screen hidden">
+    <div class="login-wrapper">
+      <form id="login-form" class="login-card">
+        <div class="login-badge-icon">
+          <span class="star-icon">🌟</span>
+        </div>
+        <h1>Gremio Estelar</h1>
+        <p class="subtitle">Panel de Control & Notificaciones</p>
+        
+        <div class="input-group">
+          <span class="input-icon">🔐</span>
+          <input type="password" id="login-password" placeholder="Introduce la contraseña del panel" autocomplete="current-password" required />
+        </div>
+        
+        <button type="submit" class="btn primary btn-glow block" id="btn-login-submit">
+          <span>Acceder al Panel</span>
+          <span class="arrow-icon">→</span>
+        </button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Pantalla Principal -->
+  <div id="app" class="screen hidden">
+    <!-- Barra superior -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <span class="brand-logo">🌟</span>
+          <div class="brand-text">
+            <span class="brand-title">Gremio Estelar</span>
+            <span class="brand-tag">v2.0 · Panel Pro</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="guild-badge-wrap">
+          <span class="guild-icon">🛡️</span>
+          <select id="guild-select" class="select select-compact" title="Servidor"></select>
+        </div>
+        <div id="status-pill" class="pill pill-glow">
+          <span class="pulse-dot"></span>
+          <span id="status-text">conectando...</span>
+        </div>
+        <button id="check-now" class="btn btn-secondary" title="Comprobar directos ahora">
+          <span class="btn-icon">⚡</span>
+          <span>Comprobar</span>
+        </button>
+        <button id="logout" class="btn ghost btn-logout" title="Cerrar sesión">
+          <span>Salir</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Métricas rápidas / Resumen -->
+    <section class="stats-overview">
+      <div class="stat-card">
+        <div class="stat-icon-wrap twitch-glow">🟣</div>
+        <div class="stat-content">
+          <span class="stat-label">Twitch API</span>
+          <div class="stat-value-row">
+            <span id="stat-twitch-status" class="stat-badge ok">Configurado ✓</span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrap total-glow">📡</div>
+        <div class="stat-content">
+          <span class="stat-label">Streamers Vigilados</span>
+          <div class="stat-value-row">
+            <span id="stat-streamers-count" class="stat-number">0</span>
+            <span id="stat-streamers-breakdown" class="stat-mini">0 T · 0 Y · 0 K</span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrap live-glow">🔴</div>
+        <div class="stat-content">
+          <span class="stat-label">En Directo Ahora</span>
+          <div class="stat-value-row">
+            <span id="stat-live-count" class="stat-number live-num">0</span>
+            <span class="stat-mini">emitiendo</span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrap sync-glow">⏱️</div>
+        <div class="stat-content">
+          <span class="stat-label">Frecuencia de Escaneo</span>
+          <div class="stat-value-row">
+            <span id="stat-poll-interval" class="stat-number">15s</span>
+            <span class="stat-mini">automático</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pestañas de navegación -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="streamers">
+        <span class="tab-icon">📺</span>
+        <span>Streamers</span>
+        <span id="tab-count-streamers" class="tab-badge">0</span>
+      </button>
+      <button class="tab" data-tab="history">
+        <span class="tab-icon">📜</span>
+        <span>Historial de Directos</span>
+        <span id="tab-count-history" class="tab-badge">0</span>
+      </button>
+      <button class="tab" data-tab="settings">
+        <span class="tab-icon">⚙️</span>
+        <span>Ajustes & Integraciones</span>
+      </button>
+    </nav>
+
+    <!-- Contenido principal -->
+    <main>
+      <!-- TAB: Streamers -->
+      <section id="tab-streamers" class="tab-panel">
+        <div class="panel-head">
+          <div class="panel-head-left">
+            <h2>Streamers en Vigilancia</h2>
+            <p class="section-desc">Gestiona qué creadores están siendo monitoreados en tiempo real.</p>
+          </div>
+          <div class="panel-actions">
+            <button id="bulk-streamer" class="btn btn-secondary">
+              <span>📋</span> Añadir varios
+            </button>
+            <button id="add-streamer" class="btn primary btn-glow">
+              <span>＋</span> Añadir streamer
+            </button>
+          </div>
+        </div>
+
+        <!-- Barra de búsqueda y filtros -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="streamer-search" placeholder="Buscar por nombre, canal o ID..." />
+          </div>
+          <div class="filter-chips">
+            <button class="chip active" data-filter="all">Todos</button>
+            <button class="chip" data-filter="twitch">🟣 Twitch</button>
+            <button class="chip" data-filter="youtube">🔴 YouTube</button>
+            <button class="chip" data-filter="kick">🟢 Kick</button>
+            <button class="chip" data-filter="live">🔴 En Vivo</button>
+          </div>
+        </div>
+
+        <div id="streamers-list" class="card-list"></div>
+      </section>
+
+      <!-- TAB: Historial -->
+      <section id="tab-history" class="tab-panel hidden">
+        <div class="panel-head">
+          <div class="panel-head-left">
+            <h2>Historial de Transmisiones</h2>
+            <p class="section-desc">Registro de directos finalizados y en curso con métricas de pico de viewers.</p>
+          </div>
+          <div class="history-controls">
+            <select id="history-filter" class="select">
+              <option value="">Todos los streamers</option>
+            </select>
+          </div>
+        </div>
+        <div id="history-list" class="card-list"></div>
+      </section>
+
+      <!-- TAB: Ajustes -->
+      <section id="tab-settings" class="tab-panel hidden">
+        <div class="panel-head">
+          <div class="panel-head-left">
+            <h2>Ajustes del Gremio & Integraciones</h2>
+            <p class="section-desc">Configuración global de canales, roles automáticos y estado de las plataformas.</p>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <!-- Columna 1: Configuración de Discord -->
+          <div class="settings-card">
+            <div class="card-header-icon">
+              <span class="header-icon">💬</span>
+              <div>
+                <h3>Canales y Roles Globales</h3>
+                <p class="card-subtitle">Valores por defecto para streamers sin canal o rol propio</p>
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="form-group">
+                <label for="cfg-channel">
+                  <span>Canal de Anuncios General</span>
+                  <small>Canal donde se publicará el aviso si el streamer no tiene uno específico</small>
+                </label>
+                <div class="select-with-icon">
+                  <span class="field-icon">#</span>
+                  <select id="cfg-channel"></select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg-live-role">
+                  <span>Rol en Directo (Global)</span>
+                  <small>Se asigna al usuario de Discord cuando entra en directo</small>
+                </label>
+                <div class="select-with-icon">
+                  <span class="field-icon">🎭</span>
+                  <select id="cfg-live-role">
+                    <option value="">— sin rol —</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg-offline-role">
+                  <span>Rol Fuera de Directo (Global)</span>
+                  <small>Se asigna cuando el directo termina</small>
+                </label>
+                <div class="select-with-icon">
+                  <span class="field-icon">💤</span>
+                  <select id="cfg-offline-role">
+                    <option value="">— sin rol —</option>
+                  </select>
+                </div>
+              </div>
+
+              <button id="save-config" class="btn primary btn-glow save-btn">
+                <span>💾 Guardar Ajustes del Gremio</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Columna 2: Estado de Plataformas & Twitch -->
+          <div class="settings-card">
+            <div class="card-header-icon">
+              <span class="header-icon">🔌</span>
+              <div>
+                <h3>Estado de Conexiones</h3>
+                <p class="card-subtitle">APIs y motores de detección en tiempo real</p>
+              </div>
+            </div>
+
+            <div class="integrations-list">
+              <!-- Twitch Integration Card -->
+              <div class="integration-item active-integration">
+                <div class="integration-top">
+                  <div class="integration-brand">
+                    <span class="platform-logo twitch-bg">🟣</span>
+                    <div>
+                      <div class="platform-name-row">
+                        <strong>Twitch Helix API</strong>
+                        <span id="twitch-status-badge" class="badge badge-success">Conectado ✓</span>
+                      </div>
+                      <span class="platform-sub">OAuth2 Client Credentials Activo</span>
+                    </div>
+                  </div>
+                  <button id="btn-test-twitch" class="btn btn-sm btn-twitch" title="Probar conexión con la API de Twitch">
+                    <span>⚡ Probar API</span>
+                  </button>
+                </div>
+
+                <div class="credentials-box">
+                  <div class="cred-row">
+                    <span class="cred-label">Client ID:</span>
+                    <code id="cred-client-id" class="cred-value">ot9p5k...8szq</code>
+                  </div>
+                  <div class="cred-row">
+                    <span class="cred-label">Client Secret:</span>
+                    <span class="cred-value protected">•••••••••••••••••••• (Cargado en .env)</span>
+                  </div>
+                </div>
+
+                <div id="twitch-test-result" class="test-result-box hidden"></div>
+
+                <ul class="feature-bullets">
+                  <li>✅ Detección en vivo en &lt; 15 segundos</li>
+                  <li>✅ Avatar del canal en alta resolución</li>
+                  <li>✅ Título del stream y categoría/juego en tiempo real</li>
+                  <li>✅ Contador de espectadores simultáneos</li>
+                </ul>
+              </div>
+
+              <!-- YouTube Card -->
+              <div class="integration-item">
+                <div class="integration-top">
+                  <div class="integration-brand">
+                    <span class="platform-logo yt-bg">🔴</span>
+                    <div>
+                      <div class="platform-name-row">
+                        <strong>YouTube Live Engine</strong>
+                        <span class="badge badge-success">Activo ✓</span>
+                      </div>
+                      <span class="platform-sub">Multi-Estrategia (LockupViewModel + Renderer + Fallback)</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="integration-desc">Detecta directos mediante extracción inteligente de metadatos en canales con <code>@handle</code> o IDs <code>UC...</code>.</p>
+              </div>
+
+              <!-- Kick Card -->
+              <div class="integration-item">
+                <div class="integration-top">
+                  <div class="integration-brand">
+                    <span class="platform-logo kick-bg">🟢</span>
+                    <div>
+                      <div class="platform-name-row">
+                        <strong>Kick API</strong>
+                        <span class="badge badge-success">Activo ✓</span>
+                      </div>
+                      <span class="platform-sub">API Pública v2 de Kick.com</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="integration-desc">Monitoreo continuo de directos en canales de Kick con miniatura y conteo de viewers.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: Añadir / Editar Streamer -->
+  <div id="modal" class="modal-overlay hidden">
+    <div class="modal modal-streamer">
+      <div class="modal-header">
+        <div class="modal-header-text">
+          <h3 id="modal-title">Configurar Streamer</h3>
+          <p class="modal-subtitle">Define la plataforma, canal y personalización del anuncio en Discord.</p>
+        </div>
+        <button type="button" class="modal-close-btn" id="modal-top-close">✕</button>
+      </div>
+
+      <form id="streamer-form">
+        <input type="hidden" id="sf-id" />
+
+        <!-- Selector de Plataforma con tarjetas visuales -->
+        <div class="form-section">
+          <span class="section-label">1. Plataforma</span>
+          <div class="platform-selector">
+            <label class="platform-option" data-plat="twitch">
+              <input type="radio" name="plat-select" value="twitch" checked />
+              <div class="platform-card twitch-card">
+                <span class="plat-icon">🟣</span>
+                <span class="plat-title">Twitch</span>
+                <span class="plat-desc">API Helix oficial</span>
+              </div>
+            </label>
+            <label class="platform-option" data-plat="youtube">
+              <input type="radio" name="plat-select" value="youtube" />
+              <div class="platform-card youtube-card">
+                <span class="plat-icon">🔴</span>
+                <span class="plat-title">YouTube</span>
+                <span class="plat-desc">@handles y URLs</span>
+              </div>
+            </label>
+            <label class="platform-option" data-plat="kick">
+              <input type="radio" name="plat-select" value="kick" />
+              <div class="platform-card kick-card">
+                <span class="plat-icon">🟢</span>
+                <span class="plat-title">Kick</span>
+                <span class="plat-desc">Canales de Kick</span>
+              </div>
+            </label>
+          </div>
+          <!-- Select oculto sincronizado para compatibilidad -->
+          <select id="sf-platform" class="hidden">
+            <option value="twitch">Twitch</option>
+            <option value="youtube">YouTube</option>
+            <option value="kick">Kick</option>
+          </select>
+        </div>
+
+        <!-- Canal / URL -->
+        <div class="form-section">
+          <span class="section-label">2. Canal o URL</span>
+          <div class="input-with-detect">
+            <input type="text" id="sf-channel" required autocomplete="off" placeholder="Pega el enlace o nombre: twitch.tv/usuario · @canal · kick.com/usuario" />
+            <span id="sf-detect-badge" class="detect-badge hidden">Auto-detectado</span>
+          </div>
+          <p class="field-hint">Admite URLs completas o nombres de usuario. La plataforma se detecta automáticamente si pegas un enlace.</p>
+        </div>
+
+        <!-- Destino en Discord y Mención -->
+        <div class="form-section">
+          <span class="section-label">3. Destino del Anuncio & Menciones</span>
+          <div class="grid2">
+            <div class="form-field">
+              <label for="sf-channel-notify">
+                <span class="field-title">📢 Canal de Anuncios</span>
+                <span class="field-desc">Canal de Discord donde se enviará el aviso</span>
+              </label>
+              <select id="sf-channel-notify">
+                <option value="">— Usar canal global del servidor —</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="sf-ping-role">
+                <span class="field-title">🔔 Mención / Ping del Aviso</span>
+                <span class="field-desc">Etiqueta a todos o a un rol cuando empiece directo</span>
+              </label>
+              <select id="sf-ping-role">
+                <option value="">— Sin mención (solo embed) —</option>
+                <option value="everyone">📢 @everyone (Mencionar a todos)</option>
+                <option value="here">🟢 @here (Mencionar a los conectados)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Roles de miembro en Discord (opcional) -->
+          <div class="sub-section-box">
+            <div class="sub-section-header">
+              <span class="sub-title">🎭 Roles automáticos para el Streamer (Opcional)</span>
+              <span class="sub-desc">Si el streamer está en tu Discord, el bot puede darle un rol temporal mientras esté transmitiendo.</span>
+            </div>
+            
+            <div class="grid3">
+              <div class="form-field">
+                <label for="sf-user">
+                  <span class="field-title">👤 Usuario de Discord</span>
+                  <span class="field-desc">Cuenta del streamer</span>
+                </label>
+                <select id="sf-user">
+                  <option value="">— Ninguno —</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="sf-live-role">
+                  <span class="field-title">🔴 Rol en Directo</span>
+                  <span class="field-desc">Asignado al transmitir</span>
+                </label>
+                <select id="sf-live-role">
+                  <option value="">— Usar global —</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="sf-offline-role">
+                  <span class="field-title">⚪ Rol Fuera de Directo</span>
+                  <span class="field-desc">Asignado al finalizar</span>
+                </label>
+                <select id="sf-offline-role">
+                  <option value="">— Usar global —</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Personalización Visual del Embed -->
+        <div class="form-section">
+          <span class="section-label">4. Apariencia del Anuncio en Discord</span>
+          
+          <div class="embed-custom-row">
+            <div class="form-field color-picker-block">
+              <label>
+                <span class="field-title">🎨 Color de la barra del Embed</span>
+                <span class="field-desc">Elige un color temático o escribe el código HEX</span>
+              </label>
+              <div class="color-picker-input-wrap">
+                <input type="color" id="sf-color-native" value="#9146FF" />
+                <input type="text" id="sf-color" placeholder="#9146FF" autocomplete="off" />
+              </div>
+              <div class="color-swatches">
+                <button type="button" class="swatch" data-color="#9146FF" style="background:#9146FF" title="Twitch Purple"></button>
+                <button type="button" class="swatch" data-color="#FF0000" style="background:#FF0000" title="YouTube Red"></button>
+                <button type="button" class="swatch" data-color="#53FC18" style="background:#53FC18" title="Kick Green"></button>
+                <button type="button" class="swatch" data-color="#5865F2" style="background:#5865F2" title="Discord Blurple"></button>
+                <button type="button" class="swatch" data-color="#FF3366" style="background:#FF3366" title="Neon Coral"></button>
+                <button type="button" class="swatch" data-color="#00D2FF" style="background:#00D2FF" title="Cyber Cyan"></button>
+                <button type="button" class="swatch" data-color="#FFB800" style="background:#FFB800" title="Gold Amber"></button>
+              </div>
+            </div>
+
+            <div class="form-field custom-msg-block">
+              <label>
+                <span class="field-title">💬 Mensaje Personalizado</span>
+                <span class="field-desc">Texto adicional que aparecerá sobre el anuncio</span>
+              </label>
+              <input type="text" id="sf-message" placeholder="¡Atención a todos, estamos en directo! 🔴" autocomplete="off" />
+              <p class="field-hint">Variables: <code>{streamer}</code>, <code>{title}</code>, <code>{url}</code></p>
+            </div>
+          </div>
+
+          <!-- Vista Previa en Vivo de Discord -->
+          <div class="discord-preview-wrap">
+            <span class="preview-title">Vista Previa del Mensaje en Discord:</span>
+            <div class="discord-mockup">
+              <div class="discord-author-row">
+                <div class="discord-bot-avatar">🌟</div>
+                <div class="discord-bot-info">
+                  <span class="discord-bot-name">Mensajero Estelar</span>
+                  <span class="discord-bot-tag">BOT</span>
+                  <span class="discord-timestamp">Hoy a las 21:30</span>
+                </div>
+              </div>
+              <div id="discord-preview-mention" class="discord-mention-line">
+                <span class="discord-mention-pill">@notificaciones</span> ¡Atención!
+              </div>
+              <div class="discord-embed" id="discord-preview-embed">
+                <div class="discord-embed-pill-bar" id="preview-border"></div>
+                <div class="discord-embed-inner">
+                  <div class="discord-embed-author">
+                    <span id="preview-avatar" class="discord-channel-icon">🟣</span>
+                    <span id="preview-channel-name">Canal de Transmisión</span>
+                  </div>
+                  <div class="discord-embed-title" id="preview-title-text">
+                    🔴 ¡Canal está en directo ahora!
+                  </div>
+                  <div class="discord-embed-desc" id="preview-desc-text">
+                    Jugando a: <strong>Just Chatting</strong> · 1,420 espectadores
+                  </div>
+                  <div class="discord-embed-banner" id="preview-banner-box">
+                    <span>🖼️ Banner de Twitch del creador</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="switch-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="sf-enabled" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">Vigilancia activa (comprobar este streamer periódicamente)</span>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="modal-cancel" class="btn ghost">Cancelar</button>
+          <button type="submit" class="btn primary btn-glow" id="sf-submit-btn">Guardar Streamer</button>
+        </div>
+        <p id="sf-error" class="error hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Añadir Varios -->
+  <div id="modal-bulk" class="modal-overlay hidden">
+    <div class="modal modal-bulk-card">
+      <div class="modal-header">
+        <div class="modal-header-text">
+          <h3>📋 Añadir Varios Streamers de Golpe</h3>
+          <p class="modal-subtitle">Pega una lista de enlaces o usuarios. La plataforma se detecta sola.</p>
+        </div>
+        <button type="button" class="modal-close-btn" id="bulk-top-close">✕</button>
+      </div>
+
+      <div class="bulk-templates-row">
+        <span class="bulk-chip-label">Plantillas rápidas:</span>
+        <button type="button" class="btn-chip" data-sample="https://twitch.tv/shroud">+ Twitch</button>
+        <button type="button" class="btn-chip" data-sample="https://www.youtube.com/@elrubius">+ YouTube</button>
+        <button type="button" class="btn-chip" data-sample="https://kick.com/xqc">+ Kick</button>
+      </div>
+
+      <div class="bulk-input-wrapper">
+        <textarea id="bulk-input" rows="8" placeholder="https://twitch.tv/shroud&#10;https://www.youtube.com/@elrubius&#10;https://kick.com/xqc&#10;https://twitch.tv/ibai"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="bulk-cancel" class="btn ghost">Cancelar</button>
+        <button type="button" id="bulk-submit" class="btn primary btn-glow">Añadir Lista</button>
+      </div>
+      <div id="bulk-result" class="bulk-result"></div>
+    </div>
+  </div>
+
+  <!-- Notificaciones Toast Flotantes -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

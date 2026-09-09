@@ -1,0 +1,31 @@
+{
+  "name": "gremio-estelar-bot",
+  "version": "0.1.0",
+  "description": "Bot de notificaciones de directos (Twitch, YouTube, Kick) para el Gremio Estelar",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "bundle:discloud": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-discloud.ps1",
+    "selftest": "tsx src/selftest.ts",
+    "smoketest-web": "tsx src/smoketest-web.ts"
+  },
+  "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
