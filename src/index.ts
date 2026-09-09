@@ -34,6 +34,9 @@ async function main(): Promise<void> {
   const monitor = new Monitor(client, store);
   const handler = createHandler(client, store, monitor);
 
+  // Iniciar servidor web/keep-alive de inmediato para que Render detecte el puerto abierto al arrancar
+  startWebServer(client, store, monitor);
+
   client.once("clientReady", async (c) => {
     log(`✅ Conectado como ${c.user.tag} en ${c.guilds.cache.size} servidor(es)`);
     if (env.GUILD_ID) {
@@ -43,7 +46,6 @@ async function main(): Promise<void> {
     }
     await registerCommands(c);
     log("📋 Comandos slash registrados");
-    startWebServer(c, store, monitor);
     monitor.start(env.POLL_INTERVAL_SECONDS, cleanStart);
   });
 

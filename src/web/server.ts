@@ -150,17 +150,63 @@ function serveStatic(res: ServerResponse, pathname: string): void {
 }
 
 export function startWebServer(client: Client, store: Store, monitor: Monitor): void {
-  if (!env.WEB_PANEL_PASSWORD) {
-    log("ℹ️ Panel web desactivado: define WEB_PANEL_PASSWORD en .env para activarlo");
-    return;
-  }
-  const key = createHmac("sha256", "gremio-estelar-panel-salt").update(env.WEB_PANEL_PASSWORD).digest();
-  const expectedPw = createHmac("sha256", "gremio-estelar-pw-check").update(env.WEB_PANEL_PASSWORD).digest();
+  const hasPanelPassword = Boolean(env.WEB_PANEL_PASSWORD);
+  const key = hasPanelPassword
+    ? createHmac("sha256", "gremio-estelar-panel-salt").update(env.WEB_PANEL_PASSWORD).digest()
+    : Buffer.alloc(32);
+  const expectedPw = hasPanelPassword
+    ? createHmac("sha256", "gremio-estelar-pw-check").update(env.WEB_PANEL_PASSWORD).digest()
+    : Buffer.alloc(32);
   const loginFails = new Map<string, { count: number; until: number }>();
 
   server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
     const method = (req.method ?? "GET").toUpperCase();
+
+    // ── Health check / Keep-Alive (UptimeRobot / Render) ────────
+    if ((url.pathname === "/healthz" || url.pathname === "/ping" || url.pathname === "/health") && method === "GET") {
+      sendJson(res, 200, {
+        status: "ok",
+        bot: client.user?.tag ?? "ready",
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // Si no hay contraseña configurada para el panel, servimos una pantalla de estado básica
+    if (!hasPanelPassword) {
+      if (url.pathname === "/" && method === "GET") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Bot Online 24/7</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #1e293b; padding: 2rem 3rem; border-radius: 12px; border: 1px solid #334155; text-align: center; max-width: 480px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
+    .status { display: inline-flex; align-items: center; gap: 8px; color: #22c55e; font-weight: bold; font-size: 1.1rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e; }
+    p { color: #94a3b8; line-height: 1.5; font-size: 0.95rem; }
+    code { background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #38bdf8; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="status"><span class="dot"></span> Bot en línea 24/7</div>
+    <h2>Gremio Estelar Bot</h2>
+    <p>El servicio web está activo y respondiendo a los pings de <strong>UptimeRobot</strong> / <strong>Render</strong>.</p>
+    <p><small>Para activar el panel de gestión web, añade la variable <code>WEB_PANEL_PASSWORD</code>.</small></p>
+  </div>
+</body>
+</html>`);
+        return;
+      }
+      sendJson(res, 404, { error: "Panel web desactivado (WEB_PANEL_PASSWORD no configurada)" });
+      return;
+    }
+
     const cookies = parseCookies(req);
     const authed = verifyToken(key, cookies[COOKIE_NAME]);
 
@@ -265,11 +311,16 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
     sendJson(res, 405, { error: "Método no permitido" });
   });
 
-  server.on("error", (e) => log("⚠️ Panel web:", e.message));
+  server.on("error", (e) => log("⚠️ Servidor web:", e.message));
   server.listen(env.WEB_PANEL_PORT, env.WEB_PANEL_HOST, () => {
-    log(`🌐 Panel web en http://${env.WEB_PANEL_HOST}:${env.WEB_PANEL_PORT} (usa WEB_PANEL_PASSWORD para entrar)`);
-    if (env.WEB_PANEL_URL) log(`🔗 El botón de /ms apuntará a: ${env.WEB_PANEL_URL}`);
-    else log(`ℹ️ Define WEB_PANEL_URL en .env para que /ms apunte a tu dirección pública (ahora usa localhost)`);
+    log(`🌐 Servidor web activo en http://${env.WEB_PANEL_HOST}:${env.WEB_PANEL_PORT} (Keep-alive / Ping en /ping)`);
+    if (hasPanelPassword) {
+      log(`🔐 Panel web de gestión activo (usa WEB_PANEL_PASSWORD para entrar)`);
+      if (env.WEB_PANEL_URL) log(`🔗 El botón de /ms apuntará a: ${env.WEB_PANEL_URL}`);
+      else log(`ℹ️ Define WEB_PANEL_URL en .env para que /ms apunte a tu dirección pública`);
+    } else {
+      log(`ℹ️ Panel web administrativo no configurado (puedes activarlo con WEB_PANEL_PASSWORD)`);
+    }
   });
 }
 

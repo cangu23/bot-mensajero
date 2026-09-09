@@ -8,8 +8,8 @@ export const env = {
   POLL_INTERVAL_SECONDS: Number(process.env.POLL_INTERVAL_SECONDS ?? "60") || 60,
   DATA_FILE: process.env.DATA_FILE ?? "./data/store.db",
   WEB_PANEL_PASSWORD: process.env.WEB_PANEL_PASSWORD ?? "",
-  WEB_PANEL_PORT: Number(process.env.WEB_PANEL_PORT ?? "3000") || 3000,
-  WEB_PANEL_HOST: process.env.WEB_PANEL_HOST ?? "127.0.0.1",
+  WEB_PANEL_PORT: Number(process.env.PORT ?? process.env.WEB_PANEL_PORT ?? "3000") || 3000,
+  WEB_PANEL_HOST: process.env.WEB_PANEL_HOST ?? (process.env.PORT ? "0.0.0.0" : "127.0.0.1"),
   /** Dirección pública del panel (para el botón de /ms). Si está vacía, usa localhost */
   WEB_PANEL_URL: process.env.WEB_PANEL_URL ?? "",
 };

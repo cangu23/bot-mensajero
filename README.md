@@ -115,6 +115,36 @@ Además de los comandos de Discord, el bot incluye un **panel web** para gestion
 
 ## 🏃 Ejecutar 24/7
 
+**En la nube gratis (Render + UptimeRobot — método del vídeo):**
+
+1. Sube tu código a GitHub:
+   ```bash
+   git add .
+   git commit -m "Preparar bot para Render 24/7"
+   git push origin main
+   ```
+2. Entra en [Render.com](https://render.com/) e inicia sesión con GitHub.
+3. Haz clic en **New +** → **Web Service** y selecciona tu repositorio `bot-mensajero`.
+4. Configura:
+   - **Name**: `gremio-estelar-bot` (o el que quieras)
+   - **Environment**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Plan**: `Free`
+5. En la sección **Environment Variables** (Variables de entorno), añade:
+   - `DISCORD_TOKEN`: tu token del bot de Discord
+   - `WEB_PANEL_PASSWORD`: una contraseña para el panel web (opcional pero recomendada)
+   - `TWITCH_CLIENT_ID` y `TWITCH_CLIENT_SECRET`: si usas Twitch (opcional)
+6. Haz clic en **Deploy Web Service**. Una vez terminado, Render te dará una URL (ejemplo: `https://gremio-estelar-bot.onrender.com`).
+7. **Mantenerlo 24/7 con UptimeRobot**:
+   - Entra en [UptimeRobot.com](https://uptimerobot.com/) y crea una cuenta gratis.
+   - Haz clic en **Add New Monitor**.
+   - **Monitor Type**: `HTTP(s)`
+   - **Friendly Name**: `Gremio Bot Keep-Alive`
+   - **URL (or IP)**: `https://tu-servicio.onrender.com/ping` (o `/healthz`)
+   - **Monitoring Interval**: cada `5 minutes` (para que Render nunca entre en suspensión por inactividad).
+   - Haz clic en **Create Monitor**. ¡Listo! El bot estará activo 24/7 gratis.
+
 **En local / VPS (Node):**
 
 ```bash

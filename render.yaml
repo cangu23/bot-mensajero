@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: gremio-estelar-bot
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /ping
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CLIENT_SECRET
+        sync: false
+      - key: WEB_PANEL_PASSWORD
+        sync: false
+      - key: WEB_PANEL_HOST
+        value: 0.0.0.0
