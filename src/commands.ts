@@ -5,6 +5,7 @@ import { log } from "./logger.js";
 import { Monitor } from "./monitor.js";
 import { adapters } from "./platforms/index.js";
 import { Store } from "./store.js";
+import { backupService } from "./backup.js";
 import { cleanHandle, detectPlatformFromInput, parseColor, PLATFORM_EMOJI, PLATFORM_LABEL, platformUrl, timeAgo } from "./util.js";
 import { createPanelAuthToken } from "./web/server.js";
 import type { GuildConfig, Platform, Streamer } from "./types.js";
@@ -80,6 +81,7 @@ const commandList = [
   new SlashCommandBuilder().setName("estado").setDescription("Estado del bot y de las plataformas"),
   new SlashCommandBuilder().setName("ms").setDescription("Abrir el panel de gestión del gremio"),
   new SlashCommandBuilder().setName("panel").setDescription("Abrir el panel de gestión (alias de /ms)"),
+  new SlashCommandBuilder().setName("backup").setDescription("Guardar o forzar copia de seguridad inmediata en Discord"),
 ];
 
 export async function registerCommands(client: Client): Promise<void> {
@@ -179,6 +181,8 @@ async function runCommand(interaction: Interaction, store: Store, monitor: Monit
     case "ms":
     case "panel":
       return cmdPanel(interaction);
+    case "backup":
+      return cmdBackup(interaction, store);
     default:
       return;
   }
@@ -466,4 +470,14 @@ async function cmdStatus(interaction: Interaction, store: Store, monitor: Monito
       { name: "🟢 Kick", value: "API pública ✅", inline: true },
     );
   await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+async function cmdBackup(interaction: Interaction, store: Store): Promise<void> {
+  if (!interaction.isChatInputCommand() || !interaction.guild) return;
+  await interaction.deferReply({ ephemeral: true });
+  await backupService.performBackup(interaction.client, store);
+  const total = store.streamerCount(interaction.guild.id);
+  await interaction.editReply({
+    content: `💾 **Copia de seguridad guardada con éxito** en el canal privado de backup.\nStreamers asegurados: **${total}**.\n*Tus streamers y ajustes ahora están protegidos permanentemente contra reinicios de Render.*`,
+  });
 }

@@ -244,6 +244,7 @@ export class Store {
           this.db.prepare(`
             UPDATE guilds SET notify_channel_id = ?, live_role_id = ?, offline_role_id = ? WHERE guild_id = ?
           `).run(target.notifyChannelId ?? null, target.liveRoleId ?? null, target.offlineRoleId ?? null, guildId);
+          this.onChange?.();
         }
         return true;
       },
@@ -275,7 +276,7 @@ export class Store {
     };
   }
 
-  // ── Streamers ──────────────────────────────────────────────────────────────
+  public onChange?: () => void;
 
   addStreamer(guildId: string, streamer: Streamer): void {
     this.db.prepare(`
@@ -283,7 +284,7 @@ export class Store {
     `).run(guildId);
 
     this.db.prepare(`
-      INSERT INTO streamers
+      INSERT OR REPLACE INTO streamers
         (id, guild_id, platform, channel, display_name, discord_user_id, mention_role_id,
          live_role_id, offline_role_id, notify_channel_id, color, message, enabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -294,13 +295,18 @@ export class Store {
       streamer.notifyChannelId ?? null, streamer.color ?? null,
       streamer.message ?? null, streamer.enabled ? 1 : 0,
     );
+    this.onChange?.();
   }
 
   removeStreamer(guildId: string, streamerId: string): boolean {
     const result = this.db.prepare(`
       DELETE FROM streamers WHERE id = ? AND guild_id = ?
     `).run(streamerId, guildId);
-    return result.changes > 0;
+    if (result.changes > 0) {
+      this.onChange?.();
+      return true;
+    }
+    return false;
   }
 
   getStreamer(guildId: string, streamerId: string): Streamer | undefined {
@@ -343,6 +349,7 @@ export class Store {
       streamer.enabled ? 1 : 0,
       streamer.id,
     );
+    this.onChange?.();
   }
 
   // ── Stream states ──────────────────────────────────────────────────────────
@@ -471,6 +478,65 @@ export class Store {
       ORDER BY MAX(started_at) DESC
     `).all(guildId) as Array<{ streamer_id: string; display_name: string }>;
     return rows.map((r) => ({ streamerId: r.streamer_id, displayName: r.display_name }));
+  }
+
+  /** Total de streamers en todos los servidores. */
+  streamerCountAll(): number {
+    const row = this.db.prepare("SELECT COUNT(*) as c FROM streamers").get() as { c: number };
+    return row.c;
+  }
+
+  /** Exporta toda la configuración y streamers a formato JSON. */
+  exportJson(): string {
+    const guildsRows = this.db.prepare("SELECT * FROM guilds").all() as Array<Record<string, unknown>>;
+    const guilds: Record<string, GuildConfig> = {};
+    for (const g of guildsRows) {
+      const gid = g.guild_id as string;
+      guilds[gid] = {
+        notifyChannelId: (g.notify_channel_id as string | null) ?? null,
+        liveRoleId: (g.live_role_id as string | null) ?? null,
+        offlineRoleId: (g.offline_role_id as string | null) ?? null,
+        streamers: this.getStreamersForGuild(gid),
+      };
+    }
+    return JSON.stringify({ guilds, version: 1, exportedAt: new Date().toISOString() }, null, 2);
+  }
+
+  /** Importa configuración y streamers desde JSON. */
+  importJson(rawJson: string): boolean {
+    try {
+      const data = JSON.parse(rawJson);
+      const guilds = data.guilds ?? {};
+      const tx = this.db.transaction(() => {
+        for (const [guildId, cfg] of Object.entries(guilds as Record<string, GuildConfig>)) {
+          this.db.prepare(`
+            INSERT OR REPLACE INTO guilds (guild_id, notify_channel_id, live_role_id, offline_role_id)
+            VALUES (?, ?, ?, ?)
+          `).run(guildId, cfg.notifyChannelId ?? null, cfg.liveRoleId ?? null, cfg.offlineRoleId ?? null);
+
+          for (const s of cfg.streamers ?? []) {
+            this.db.prepare(`
+              INSERT OR REPLACE INTO streamers
+                (id, guild_id, platform, channel, display_name, discord_user_id, mention_role_id,
+                 live_role_id, offline_role_id, notify_channel_id, color, message, enabled)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              s.id, guildId, s.platform, s.channel, s.displayName,
+              s.discordUserId ?? null, s.mentionRoleId ?? null,
+              s.liveRoleId ?? null, s.offlineRoleId ?? null,
+              s.notifyChannelId ?? null, s.color ?? null,
+              s.message ?? null, s.enabled ? 1 : 0,
+            );
+          }
+        }
+      });
+      tx();
+      log(`📥 Copia importada con éxito: ${this.streamerCountAll()} streamers cargados.`);
+      return true;
+    } catch (e) {
+      log("⚠️ Error importando JSON:", e instanceof Error ? e.message : String(e));
+      return false;
+    }
   }
 
   // ── Compatibilidad con el Store JSON ──────────────────────────────────────

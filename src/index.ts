@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits } from "discord.js";
+import { backupService } from "./backup.js";
 import { createHandler, registerCommands, registerCommandsForGuild } from "./commands.js";
 import { env, validateEnv } from "./env.js";
 import { ProcessLock } from "./lock.js";
@@ -31,6 +32,11 @@ async function main(): Promise<void> {
     allowedMentions: { parse: ["roles", "everyone", "users"], repliedUser: false },
   });
 
+  // Guardar copia automática en Discord cada vez que cambien streamers o ajustes
+  store.onChange = () => {
+    backupService.scheduleBackup(client, store);
+  };
+
   const monitor = new Monitor(client, store);
   const handler = createHandler(client, store, monitor);
 
@@ -39,6 +45,9 @@ async function main(): Promise<void> {
 
   client.once("clientReady", async (c) => {
     log(`✅ Conectado como ${c.user.tag} en ${c.guilds.cache.size} servidor(es)`);
+    // Si Render reinició o se hizo un nuevo deploy, restauramos la copia de seguridad de Discord
+    await backupService.restoreIfEmpty(c, store);
+
     if (env.GUILD_ID) {
       log(
         `🔗 Invita al bot (solo si no lo has hecho): https://discord.com/api/oauth2/authorize?client_id=${c.user.id}&permissions=${INVITE_PERMISSIONS}&scope=bot%20applications.commands`,
