@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import { backupService } from "./backup.js";
 import { createHandler, registerCommands, registerCommandsForGuild } from "./commands.js";
+import { registerAgentWorker } from "./agentWorker.js";
 import { env, validateEnv } from "./env.js";
 import { ProcessLock } from "./lock.js";
 import { log } from "./logger.js";
@@ -39,6 +40,9 @@ async function main(): Promise<void> {
 
   const monitor = new Monitor(client, store);
   const handler = createHandler(client, store, monitor);
+
+  // Worker del protocolo CHRISTEND-AGENT v1: recibe órdenes de Christend
+  registerAgentWorker(client, store, monitor);
 
   // Iniciar servidor web/keep-alive de inmediato para que Render detecte el puerto abierto al arrancar
   startWebServer(client, store, monitor);
