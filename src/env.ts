@@ -12,6 +12,10 @@ export const env = {
   WEB_PANEL_HOST: process.env.WEB_PANEL_HOST ?? (process.env.PORT ? "0.0.0.0" : "127.0.0.1"),
   /** Dirección pública del panel (para el botón de /ms). Render inyecta RENDER_EXTERNAL_URL automáticamente */
   WEB_PANEL_URL: process.env.WEB_PANEL_URL ?? process.env.RENDER_EXTERNAL_URL ?? "",
+  /** Integración con Gremio Web: auto-sincronización de VTubers y Streamers */
+  GREMIO_API_URL: process.env.GREMIO_API_URL ?? "https://gremioweb-hnq1.onrender.com/api",
+  AUTO_SYNC_GREMIO: process.env.AUTO_SYNC_GREMIO !== "false",
+  GREMIO_SYNC_INTERVAL_MS: Number(process.env.GREMIO_SYNC_INTERVAL_MS ?? "600000") || 600000,
 };
 
 /** URL que se muestra/abre desde Discord (el botón de /ms). */

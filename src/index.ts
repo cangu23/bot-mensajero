@@ -8,6 +8,7 @@ import { log } from "./logger.js";
 import { Monitor } from "./monitor.js";
 import { Store } from "./store.js";
 import { startWebServer, stopWebServer } from "./web/server.js";
+import { startGremioSync, stopGremioSync } from "./gremioSync.js";
 
 const INVITE_PERMISSIONS = 268528648; // ver canal, mensajes, gestionar mensajes, embeds, historial, gestionar roles, mencionar roles
 
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
     await registerCommands(c);
     log("📋 Comandos slash registrados");
     monitor.start(env.POLL_INTERVAL_SECONDS, cleanStart);
+    startGremioSync(c, store);
   });
 
   client.on("interactionCreate", handler);
@@ -76,6 +78,7 @@ async function main(): Promise<void> {
 
   async function shutdown(): Promise<void> {
     log("👋 Apagando...");
+    stopGremioSync();
     monitor.stop();
     stopWebServer();
     store.flushNow();

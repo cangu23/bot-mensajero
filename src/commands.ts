@@ -8,6 +8,7 @@ import { Store } from "./store.js";
 import { backupService } from "./backup.js";
 import { cleanHandle, detectPlatformFromInput, parseColor, PLATFORM_EMOJI, PLATFORM_LABEL, platformUrl, timeAgo } from "./util.js";
 import { createPanelAuthToken } from "./web/server.js";
+import { syncCreatorsFromGremio } from "./gremioSync.js";
 import type { GuildConfig, Platform, Streamer } from "./types.js";
 
 const PLATFORM_CHOICES = [
@@ -82,6 +83,7 @@ const commandList = [
   new SlashCommandBuilder().setName("ms").setDescription("Abrir el panel de gestión del gremio"),
   new SlashCommandBuilder().setName("panel").setDescription("Abrir el panel de gestión (alias de /ms)"),
   new SlashCommandBuilder().setName("backup").setDescription("Guardar o forzar copia de seguridad inmediata en Discord"),
+  new SlashCommandBuilder().setName("sincronizar").setDescription("Sincronizar creadores automáticamente desde Gremio Web"),
 ];
 
 export async function registerCommands(client: Client): Promise<void> {
@@ -183,6 +185,8 @@ async function runCommand(interaction: Interaction, store: Store, monitor: Monit
       return cmdPanel(interaction);
     case "backup":
       return cmdBackup(interaction, store);
+    case "sincronizar":
+      return cmdSincronizar(interaction, store);
     default:
       return;
   }
@@ -480,4 +484,28 @@ async function cmdBackup(interaction: Interaction, store: Store): Promise<void> 
   await interaction.editReply({
     content: `💾 **Copia de seguridad guardada con éxito** en el canal privado de backup.\nStreamers asegurados: **${total}**.\n*Tus streamers y ajustes ahora están protegidos permanentemente contra reinicios de Render.*`,
   });
+}
+
+async function cmdSincronizar(interaction: Interaction, store: Store): Promise<void> {
+  if (!interaction.isChatInputCommand() || !interaction.guild) return;
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const res = await syncCreatorsFromGremio(interaction.client, store);
+    const embed = new EmbedBuilder()
+      .setColor(0x00bcd4)
+      .setTitle("✦ Sincronización con Gremio Web")
+      .setDescription(
+        `Se consultaron los directorios oficiales de VTubers y Streamers en **gremioestelar.com**.\n\n` +
+        `• **Nuevos canales registrados:** \`${res.added}\`\n` +
+        `• **Canales actualizados:** \`${res.updated}\`\n` +
+        `• **Total de canales activos vigilados:** \`${res.total}\`\n\n` +
+        `*El bot vigilará sus directos automáticamente sin necesidad de agregarlos a mano.*`
+      )
+      .setFooter({ text: "Sincronización cósmica automática activa cada 10 min" });
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err: any) {
+    await interaction.editReply({
+      content: `❌ Error durante la sincronización: ${err?.message || err}`,
+    });
+  }
 }
