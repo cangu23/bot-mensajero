@@ -22,6 +22,51 @@ interface TwitchStream {
   thumbnail_url: string;
 }
 
+interface TwitchVideo {
+  id: string;
+  user_id: string;
+  created_at: string;
+  duration: string;
+}
+
+export function parseTwitchDurationMs(durationStr: string): number {
+  let ms = 0;
+  const h = durationStr.match(/(\d+)h/i);
+  const m = durationStr.match(/(\d+)m/i);
+  const s = durationStr.match(/(\d+)s/i);
+  if (h) ms += parseInt(h[1]!, 10) * 3600_000;
+  if (m) ms += parseInt(m[1]!, 10) * 60_000;
+  if (s) ms += parseInt(s[1]!, 10) * 1000;
+  return ms;
+}
+
+export async function getTwitchVodEndTime(channel: string, startedAt: string | null): Promise<string | null> {
+  if (!startedAt) return null;
+  const user = await getUser(channel.toLowerCase());
+  if (!user) return null;
+  try {
+    const videos = await helix<TwitchVideo[]>(`videos?user_id=${user.id}&type=archive&first=1`);
+    if (!videos || videos.length === 0) return null;
+    const v = videos[0];
+    if (!v || !v.duration || !v.created_at) return null;
+
+    const vodStartMs = new Date(v.created_at).getTime();
+    const streamStartMs = new Date(startedAt).getTime();
+    if (isNaN(vodStartMs) || isNaN(streamStartMs)) return null;
+
+    // Verificar que el VOD corresponde al directo en cuestión (iniciado a +-45 min del directo)
+    if (Math.abs(vodStartMs - streamStartMs) > 45 * 60_000) return null;
+
+    const durMs = parseTwitchDurationMs(v.duration);
+    if (durMs <= 0) return null;
+
+    const endMs = vodStartMs + durMs;
+    return new Date(endMs).toISOString();
+  } catch {
+    return null;
+  }
+}
+
 let token: { access: string; expiresAt: number } | null = null;
 
 async function ensureToken(): Promise<string | null> {

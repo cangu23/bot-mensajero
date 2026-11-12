@@ -142,7 +142,7 @@ export async function markOffline(
       const unixStart = Math.floor(new Date(state.startedAt).getTime() / 1000);
       fields.push({
         name: "⏳ Duración",
-        value: `**${formatDuration(state.startedAt)}**`,
+        value: `**${formatDuration(state.startedAt, state.endedAt)}**`,
         inline: true,
       });
       fields.push({

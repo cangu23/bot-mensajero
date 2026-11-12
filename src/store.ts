@@ -34,6 +34,7 @@ function defaultState(): StreamState {
     notifyChannelId: null,
     title: null,
     startedAt: null,
+    lastLiveAt: null,
     lastVideoId: null,
     lastCheckedVideoId: null,
     activeHistoryId: null,
@@ -113,6 +114,7 @@ export class Store {
         notify_channel_id     TEXT,
         title                 TEXT,
         started_at            TEXT,
+        last_live_at          TEXT,
         last_video_id         TEXT,
         last_checked_video_id TEXT,
         active_history_id     TEXT,
@@ -137,6 +139,13 @@ export class Store {
       CREATE INDEX IF NOT EXISTS idx_history_guild   ON history(guild_id);
       CREATE INDEX IF NOT EXISTS idx_history_streamer ON history(streamer_id);
     `);
+
+    // Migración defensiva si la DB ya existía sin la columna last_live_at
+    try {
+      this.db.exec("ALTER TABLE states ADD COLUMN last_live_at TEXT");
+    } catch {
+      // Ignorar si la columna ya existe
+    }
   }
 
   // ── Migración desde JSON ─────────────────────────────────────────────────
@@ -375,6 +384,7 @@ export class Store {
       notifyChannelId:     (row.notify_channel_id as string | null) ?? null,
       title:               (row.title as string | null) ?? null,
       startedAt:           (row.started_at as string | null) ?? null,
+      lastLiveAt:          (row.last_live_at as string | null) ?? null,
       lastVideoId:         (row.last_video_id as string | null) ?? null,
       lastCheckedVideoId:  (row.last_checked_video_id as string | null) ?? null,
       activeHistoryId:     (row.active_history_id as string | null) ?? null,
@@ -386,8 +396,8 @@ export class Store {
     this.db.prepare(`
       INSERT INTO states
         (streamer_id, is_live, consecutive_offline, notify_message_id, notify_channel_id,
-         title, started_at, last_video_id, last_checked_video_id, active_history_id, peak_viewers)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         title, started_at, last_live_at, last_video_id, last_checked_video_id, active_history_id, peak_viewers)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(streamer_id) DO UPDATE SET
         is_live               = excluded.is_live,
         consecutive_offline   = excluded.consecutive_offline,
@@ -395,6 +405,7 @@ export class Store {
         notify_channel_id     = excluded.notify_channel_id,
         title                 = excluded.title,
         started_at            = excluded.started_at,
+        last_live_at          = excluded.last_live_at,
         last_video_id         = excluded.last_video_id,
         last_checked_video_id = excluded.last_checked_video_id,
         active_history_id     = excluded.active_history_id,
@@ -407,6 +418,7 @@ export class Store {
       state.notifyChannelId ?? null,
       state.title ?? null,
       state.startedAt ?? null,
+      state.lastLiveAt ?? null,
       state.lastVideoId ?? null,
       state.lastCheckedVideoId ?? null,
       state.activeHistoryId ?? null,
@@ -433,6 +445,14 @@ export class Store {
         SELECT id FROM history WHERE guild_id = ? ORDER BY started_at DESC LIMIT ?
       )
     `).run(entry.guildId, entry.guildId, MAX_HISTORY);
+  }
+
+  /** Actualiza en caliente el pico de espectadores de la sesión en curso */
+  updateHistoryPeak(id: string, peakViewers: number): void {
+    if (!id || peakViewers <= 0) return;
+    this.db.prepare(`
+      UPDATE history SET peak_viewers = MAX(peak_viewers, ?) WHERE id = ?
+    `).run(peakViewers, id);
   }
 
   /** Cierra una entrada de historial abierta (fin del directo). */

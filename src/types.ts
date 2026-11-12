@@ -39,6 +39,8 @@ export interface StreamState {
   notifyChannelId: string | null;
   title: string | null;
   startedAt: string | null;
+  lastLiveAt?: string | null;
+  endedAt?: string | null;
   /** YouTube: último vídeo visto en el feed */
   lastVideoId: string | null;
   /** YouTube: último vídeo cuya página hemos comprobado */

@@ -3,6 +3,7 @@ import { Client, Guild } from "discord.js";
 import { log } from "./logger.js";
 import { markOffline, notifyLive } from "./notifications.js";
 import { adapters } from "./platforms/index.js";
+import { getTwitchVodEndTime } from "./platforms/twitch.js";
 import type { CheckResult } from "./platforms/types.js";
 import { applyLive, applyOffline } from "./roles.js";
 import { Store } from "./store.js";
@@ -183,6 +184,7 @@ export class Monitor {
         }
 
         state.startedAt = safeStartedAt;
+        state.lastLiveAt = safeStartedAt;
         state.peakViewers = snap.viewers ?? 0;
         const sent = await notifyLive(guildObj, cfg, streamer, { ...snap, startedAt: safeStartedAt });
         state.notifyMessageId = sent?.message.id ?? null;
@@ -208,7 +210,14 @@ export class Monitor {
         summary.live++;
         summary.liveNames.push(streamer.displayName);
       } else {
-        state.peakViewers = Math.max(state.peakViewers ?? 0, snap.viewers ?? 0);
+        const currentViewers = snap.viewers ?? 0;
+        if (currentViewers > state.peakViewers) {
+          state.peakViewers = currentViewers;
+          if (state.activeHistoryId) {
+            this.store.updateHistoryPeak(state.activeHistoryId, state.peakViewers);
+          }
+        }
+        state.lastLiveAt = new Date().toISOString();
         summary.live++;
         summary.liveNames.push(streamer.displayName);
       }
@@ -217,13 +226,41 @@ export class Monitor {
       if (state.consecutiveOffline >= CONFIRM_OFFLINE_CHECKS) {
         // Transición: termina el directo
         state.isLive = false;
-        await markOffline(guildObj, cfg, streamer, state);
-        // Historial: cerramos la entrada abierta
-        this.store.finalizeHistory(state.activeHistoryId ?? "", new Date().toISOString(), state.peakViewers ?? 0);
+
+        // Determinar la hora real de finalización
+        let realEndedAt = new Date().toISOString();
+
+        // 1. Si es Twitch, consultar la duración exacta del VOD archivado en Twitch
+        if (streamer.platform === "twitch") {
+          try {
+            const vodEnd = await getTwitchVodEndTime(streamer.channel, state.startedAt);
+            if (vodEnd) {
+              realEndedAt = vodEnd;
+            }
+          } catch {
+            // Ignorar y usar fallback
+          }
+        }
+
+        // 2. Si no se obtuvo del VOD y hubo un salto anormal de tiempo
+        // (por ejemplo, el bot estuvo apagado/dormido o la API estuvo caída más de 15 min):
+        // el directo realmente terminó cerca del último momento en que se le vio en directo (lastLiveAt).
+        if (realEndedAt === new Date().toISOString() && state.lastLiveAt) {
+          const lastLiveMs = new Date(state.lastLiveAt).getTime();
+          const nowMs = Date.now();
+          if (!isNaN(lastLiveMs) && nowMs - lastLiveMs > 15 * 60_000) {
+            realEndedAt = new Date(lastLiveMs + 2 * 60_000).toISOString();
+          }
+        }
+
+        await markOffline(guildObj, cfg, streamer, { ...state, endedAt: realEndedAt });
+        // Historial: cerramos la entrada abierta con la hora y pico reales
+        this.store.finalizeHistory(state.activeHistoryId ?? "", realEndedAt, state.peakViewers ?? 0);
         state.activeHistoryId = null;
         state.notifyMessageId = null;
         state.notifyChannelId = null;
         state.startedAt = null;
+        state.lastLiveAt = null;
         state.title = null;
         state.peakViewers = 0;
         await applyOffline(guildObj, cfg, streamer);

@@ -65,6 +65,36 @@ class RateLimiter {
 }
 
 let server: ReturnType<typeof createServer> | null = null;
+let keepAliveTimer: NodeJS.Timeout | null = null;
+
+function startKeepAlive(): void {
+  if (keepAliveTimer) return;
+  const targetUrl =
+    process.env.RENDER_EXTERNAL_URL ||
+    (env.WEB_PANEL_URL?.startsWith("http") ? env.WEB_PANEL_URL : null) ||
+    "https://bot-mensajero.onrender.com";
+
+  const pingUrl = `${targetUrl.replace(/\/+$/, "")}/ping`;
+  log(`📡 Keep-Alive activo para Render: autoping a ${pingUrl} cada 8 min`);
+
+  // Ping inicial tras 45s de arranque
+  setTimeout(() => {
+    void fetch(pingUrl).catch(() => {});
+  }, 45_000).unref?.();
+
+  // Ping periódico cada 8 minutos (evita que Render suspenda el contenedor tras 15 min de inactividad)
+  keepAliveTimer = setInterval(() => {
+    fetch(pingUrl)
+      .then((r) => {
+        if (!r.ok) log(`⚠️ Keep-Alive: respuesta HTTP ${r.status}`);
+      })
+      .catch((e) => {
+        log(`⚠️ Keep-Alive: error de ping: ${e instanceof Error ? e.message : String(e)}`);
+      });
+  }, 8 * 60_000);
+
+  keepAliveTimer.unref?.();
+}
 const rateLimiter = new RateLimiter();
 // Limpieza periódica para no acumular IPs inactivas
 setInterval(() => rateLimiter.prune(), 5 * 60_000).unref();
@@ -341,6 +371,7 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
   server.on("error", (e) => log("⚠️ Servidor web:", e.message));
   server.listen(env.WEB_PANEL_PORT, env.WEB_PANEL_HOST, () => {
     log(`🌐 Servidor web activo en http://${env.WEB_PANEL_HOST}:${env.WEB_PANEL_PORT} (Keep-alive / Ping en /ping)`);
+    startKeepAlive();
     if (hasPanelPassword) {
       log(`🔐 Panel web de gestión activo (usa WEB_PANEL_PASSWORD para entrar)`);
       if (env.WEB_PANEL_URL) log(`🔗 El botón de /ms apuntará a: ${env.WEB_PANEL_URL}`);
@@ -352,6 +383,10 @@ export function startWebServer(client: Client, store: Store, monitor: Monitor): 
 }
 
 export function stopWebServer(): void {
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
   if (server) {
     server.closeAllConnections?.(); // evita sockets keep-alive colgados en el cierre
     server.close();
