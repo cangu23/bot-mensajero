@@ -184,18 +184,59 @@ function parseFeed(xml: string): YtEntry[] {
   return entries;
 }
 
-/** Comprueba si un vídeo está emitiéndose en directo ahora mismo. null = no se pudo comprobar. */
-async function isVideoLive(videoId: string): Promise<boolean | null> {
+interface VideoLiveStatus {
+  isLive: boolean;
+  startedAt?: string;
+}
+
+/** Comprueba si un vídeo está emitiéndose en directo ahora mismo y extrae la hora de inicio real si está disponible. null = no se pudo comprobar. */
+async function isVideoLive(videoId: string): Promise<VideoLiveStatus | null> {
   try {
     const r = await httpGet(`https://www.youtube.com/watch?v=${videoId}`, {
       Cookie: "CONSENT=YES+1; SOCS=CAI",
     });
     if (!r.ok) return null;
-    if (/video unavailable/i.test(r.body)) return false;
+    if (/video unavailable/i.test(r.body)) return { isLive: false };
+
     // Dos señales: la propiedad isLive del JSON o el badge LIVE en el HTML
     const isLiveJson = /"isLive"\s*:\s*true/.test(r.body);
     const isLiveBadge = /"style"\s*:\s*"LIVE"/.test(r.body) || /class="[^"]*ytp-live[^"]*"/.test(r.body);
-    return isLiveJson || isLiveBadge;
+    const isLive = isLiveJson || isLiveBadge;
+
+    if (!isLive) return { isLive: false };
+
+    let startedAt: string | undefined = undefined;
+
+    // 1. startDate meta tag (indica el inicio real del streaming)
+    const metaDate = /<meta\s+itemprop="startDate"\s+content="([^"]+)"/i.exec(r.body)?.[1];
+    if (metaDate) {
+      const d = new Date(metaDate);
+      if (!isNaN(d.getTime())) startedAt = d.toISOString();
+    }
+
+    // 2. playerMicroformatRenderer startTimestamp
+    if (!startedAt) {
+      const startTs = /"startTimestamp"\s*:\s*"([^"]+)"/.exec(r.body)?.[1];
+      if (startTs) {
+        const d = new Date(startTs);
+        if (!isNaN(d.getTime())) startedAt = d.toISOString();
+      }
+    }
+
+    // 3. actualStartTime (segundos o ms unix)
+    if (!startedAt) {
+      const actualStart = /"actualStartTime"\s*:\s*"?(\d+)"?/.exec(r.body)?.[1];
+      if (actualStart) {
+        const num = Number(actualStart);
+        if (!isNaN(num) && num > 0) {
+          const ms = num < 10000000000 ? num * 1000 : num;
+          const d = new Date(ms);
+          if (!isNaN(d.getTime())) startedAt = d.toISOString();
+        }
+      }
+    }
+
+    return { isLive: true, startedAt };
   } catch {
     return null;
   }
@@ -222,7 +263,16 @@ async function resolveHandle(handle: string): Promise<{ channelId: string; displ
   return null;
 }
 
-function liveSnapshot(entry: YtEntry | LatestVideo, channel: string): StreamSnapshot {
+function liveSnapshot(entry: YtEntry | LatestVideo, channel: string, realStartedAt?: string): StreamSnapshot {
+  // Evitar usar entry.published si fue hace más de 30 min (es la fecha en que se programó o creó el video en YouTube)
+  let safeStartedAt: string | undefined = realStartedAt;
+  if (!safeStartedAt && entry.published) {
+    const pubTime = new Date(entry.published).getTime();
+    if (!isNaN(pubTime) && Math.abs(Date.now() - pubTime) <= 30 * 60_000) {
+      safeStartedAt = new Date(pubTime).toISOString();
+    }
+  }
+
   return {
     ok: true,
     isLive: true,
@@ -230,7 +280,7 @@ function liveSnapshot(entry: YtEntry | LatestVideo, channel: string): StreamSnap
     category: "YouTube",
     url: `https://www.youtube.com/watch?v=${entry.videoId}`,
     thumbnailUrl: entry.thumbnail ?? undefined,
-    startedAt: entry.published || undefined,
+    startedAt: safeStartedAt,
   };
 }
 
@@ -289,7 +339,10 @@ export const youtube: PlatformAdapter = {
           // Seguimos un directo: comprobar si sigue en directo (para detectar el final)
           const live = await isVideoLive(latest.videoId);
           if (live === null) return { snapshot: { ok: false, isLive: false, url: channelUrl }, state: patch };
-          return { snapshot: live ? liveSnapshot(latest, streamer.channel) : offlineSnapshot(streamer.channel), state: patch };
+          return {
+            snapshot: live.isLive ? liveSnapshot(latest, streamer.channel, live.startedAt) : offlineSnapshot(streamer.channel),
+            state: patch,
+          };
         }
         // No estamos en directo: re-comprobar solo si es reciente o tiene pinta de directo
         const ageH = latest.published ? (Date.now() - new Date(latest.published).getTime()) / 3_600_000 : Infinity;
@@ -298,7 +351,7 @@ export const youtube: PlatformAdapter = {
           const live = await isVideoLive(latest.videoId);
           if (live === null) return { snapshot: { ok: false, isLive: false, url: channelUrl }, state: patch };
           patch.lastCheckedVideoId = latest.videoId;
-          if (live) return { snapshot: liveSnapshot(latest, streamer.channel), state: { ...patch, lastVideoId: latest.videoId } };
+          if (live.isLive) return { snapshot: liveSnapshot(latest, streamer.channel, live.startedAt), state: { ...patch, lastVideoId: latest.videoId } };
         }
         return { snapshot: offlineSnapshot(streamer.channel), state: patch };
       }
@@ -307,7 +360,7 @@ export const youtube: PlatformAdapter = {
       const live = await isVideoLive(latest.videoId);
       if (live === null) return { snapshot: { ok: false, isLive: false, url: channelUrl }, state: patch };
       patch.lastCheckedVideoId = latest.videoId;
-      if (live) return { snapshot: liveSnapshot(latest, streamer.channel), state: { ...patch, lastVideoId: latest.videoId } };
+      if (live.isLive) return { snapshot: liveSnapshot(latest, streamer.channel, live.startedAt), state: { ...patch, lastVideoId: latest.videoId } };
       return { snapshot: offlineSnapshot(streamer.channel), state: { ...patch, lastVideoId: latest.videoId } };
     } catch (e) {
       log("⚠️ YouTube: error comprobando", streamer.channel, "→", e instanceof Error ? e.message : String(e));

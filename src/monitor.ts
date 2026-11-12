@@ -165,9 +165,26 @@ export class Monitor {
         // Transición: empieza el directo
         state.isLive = true;
         state.title = snap.title ?? null;
-        state.startedAt = snap.startedAt ?? null;
+
+        let safeStartedAt = snap.startedAt;
+        if (safeStartedAt) {
+          const startTime = new Date(safeStartedAt).getTime();
+          const nowMs = Date.now();
+          // Calibración de seguridad:
+          // Si el timestamp no es válido, está en el futuro (>5 min),
+          // o supera 3 horas en el pasado para un directo recién detectado por polling
+          // (típico caso de YouTube donde la fecha es la de creación del stream programado),
+          // calibramos a la hora actual para evitar duraciones erróneas.
+          if (isNaN(startTime) || startTime > nowMs + 5 * 60_000 || nowMs - startTime > 3 * 3600_000) {
+            safeStartedAt = new Date().toISOString();
+          }
+        } else {
+          safeStartedAt = new Date().toISOString();
+        }
+
+        state.startedAt = safeStartedAt;
         state.peakViewers = snap.viewers ?? 0;
-        const sent = await notifyLive(guildObj, cfg, streamer, snap);
+        const sent = await notifyLive(guildObj, cfg, streamer, { ...snap, startedAt: safeStartedAt });
         state.notifyMessageId = sent?.message.id ?? null;
         // Guardamos el canal REAL donde se publicó (puede ser el propio del streamer)
         state.notifyChannelId = sent?.channelId ?? null;
@@ -183,7 +200,7 @@ export class Monitor {
           displayName: streamer.displayName,
           title: state.title,
           url: snap.url,
-          startedAt: snap.startedAt ?? new Date().toISOString(),
+          startedAt: safeStartedAt,
           endedAt: null,
           peakViewers: state.peakViewers,
         });
@@ -206,6 +223,9 @@ export class Monitor {
         state.activeHistoryId = null;
         state.notifyMessageId = null;
         state.notifyChannelId = null;
+        state.startedAt = null;
+        state.title = null;
+        state.peakViewers = 0;
         await applyOffline(guildObj, cfg, streamer);
         summary.offline++;
       }

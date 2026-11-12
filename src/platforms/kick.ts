@@ -31,6 +31,19 @@ export async function getKickAvatar(channel: string): Promise<string | null> {
   }
 }
 
+function normalizeKickStartedAt(raw?: string | null): string | undefined {
+  if (!raw || typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  // Kick suele devolver "YYYY-MM-DD HH:mm:ss" en UTC sin sufijo Z
+  const isoCandidate = trimmed.includes("T")
+    ? (trimmed.endsWith("Z") ? trimmed : `${trimmed}Z`)
+    : `${trimmed.replace(" ", "T")}${trimmed.endsWith("Z") ? "" : "Z"}`;
+  const d = new Date(isoCandidate);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
 /**
  * Kick no tiene API oficial pública; este endpoint público no documentado
  * se usa ampliamente por la comunidad. Puede cambiar o limitarse: si eso
@@ -71,7 +84,7 @@ export const kick: PlatformAdapter = {
           thumbnailUrl: ls.thumbnail?.url ?? undefined,
           avatarUrl: r.data.user?.profile_pic ?? undefined,
           url: url(streamer.channel),
-          startedAt: ls.started_at ?? undefined,
+          startedAt: normalizeKickStartedAt(ls.started_at),
         },
       };
     } catch (e) {

@@ -81,7 +81,9 @@ export function formatDuration(startIso: string | undefined | null, endIso?: str
   const start = new Date(startIso).getTime();
   if (Number.isNaN(start)) return "—";
   const end = endIso ? new Date(endIso).getTime() : Date.now();
-  const diffSec = Math.max(0, Math.floor((end - start) / 1000));
+  if (Number.isNaN(end) || end < start) return "—";
+  const diffSec = Math.floor((end - start) / 1000);
+  if (diffSec <= 0) return "1 min";
   const hours = Math.floor(diffSec / 3600);
   const minutes = Math.floor((diffSec % 3600) / 60);
   if (hours > 0) {
