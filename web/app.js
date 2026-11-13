@@ -470,7 +470,30 @@ async function renderHistory() {
     stateBadge.className = h.endedAt ? "badge off" : "badge live";
     stateBadge.textContent = h.endedAt ? "Finalizado" : "EN CURSO";
 
-    card.append(dot, titleWrap, stateBadge);
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn danger";
+    delBtn.style.padding = "4px 8px";
+    delBtn.style.fontSize = "12px";
+    delBtn.style.marginLeft = "8px";
+    delBtn.innerHTML = "🗑";
+    delBtn.title = "Eliminar del historial";
+    delBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`¿Eliminar este registro del historial?`)) return;
+      try {
+        await api(`/api/history/${encodeURIComponent(h.id)}`, { method: "DELETE" });
+        await loadHistory();
+      } catch (err) {
+        showToast("Error al eliminar registro: " + err.message, "error");
+      }
+    });
+
+    const badgeWrap = document.createElement("div");
+    badgeWrap.style.display = "flex";
+    badgeWrap.style.alignItems = "center";
+    badgeWrap.append(stateBadge, delBtn);
+
+    card.append(dot, titleWrap, badgeWrap);
     container.appendChild(card);
   }
 }

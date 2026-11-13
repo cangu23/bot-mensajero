@@ -45,23 +45,26 @@ export async function getTwitchVodEndTime(channel: string, startedAt: string | n
   const user = await getUser(channel.toLowerCase());
   if (!user) return null;
   try {
-    const videos = await helix<TwitchVideo[]>(`videos?user_id=${user.id}&type=archive&first=1`);
+    const videos = await helix<TwitchVideo[]>(`videos?user_id=${user.id}&type=archive&first=5`);
     if (!videos || videos.length === 0) return null;
-    const v = videos[0];
-    if (!v || !v.duration || !v.created_at) return null;
 
-    const vodStartMs = new Date(v.created_at).getTime();
     const streamStartMs = new Date(startedAt).getTime();
-    if (isNaN(vodStartMs) || isNaN(streamStartMs)) return null;
+    if (isNaN(streamStartMs)) return null;
 
-    // Verificar que el VOD corresponde al directo en cuestión (iniciado a +-45 min del directo)
-    if (Math.abs(vodStartMs - streamStartMs) > 45 * 60_000) return null;
+    // Buscar el VOD más cercano al inicio del directo (dentro de un margen de 2 horas)
+    for (const v of videos) {
+      if (!v || !v.duration || !v.created_at) continue;
+      const vodStartMs = new Date(v.created_at).getTime();
+      if (isNaN(vodStartMs)) continue;
 
-    const durMs = parseTwitchDurationMs(v.duration);
-    if (durMs <= 0) return null;
-
-    const endMs = vodStartMs + durMs;
-    return new Date(endMs).toISOString();
+      if (Math.abs(vodStartMs - streamStartMs) <= 2 * 3600_000) {
+        const durMs = parseTwitchDurationMs(v.duration);
+        if (durMs > 0) {
+          return new Date(vodStartMs + durMs).toISOString();
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }

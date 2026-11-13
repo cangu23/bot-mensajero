@@ -462,6 +462,12 @@ export class Store {
     `).run(endedAt, peakViewers, id);
   }
 
+  /** Elimina una entrada individual del historial */
+  deleteHistoryEntry(id: string): boolean {
+    const res = this.db.prepare(`DELETE FROM history WHERE id = ?`).run(id);
+    return res.changes > 0;
+  }
+
   getHistory(opts: { guildId?: string; streamerId?: string; limit?: number }): HistoryEntry[] {
     const { guildId, streamerId, limit = 100 } = opts;
     const safeLimit = Math.min(Math.max(limit, 1), 500);

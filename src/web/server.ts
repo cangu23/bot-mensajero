@@ -72,7 +72,7 @@ function startKeepAlive(): void {
   const targetUrl =
     process.env.RENDER_EXTERNAL_URL ||
     (env.WEB_PANEL_URL?.startsWith("http") ? env.WEB_PANEL_URL : null) ||
-    "https://bot-mensajero.onrender.com";
+    "https://gremio-estelar-bot.onrender.com";
 
   const pingUrl = `${targetUrl.replace(/\/+$/, "")}/ping`;
   log(`📡 Keep-Alive activo para Render: autoping a ${pingUrl} cada 8 min`);

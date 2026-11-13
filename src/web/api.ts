@@ -128,6 +128,12 @@ export async function handleApi(ctx: ApiContext): Promise<void> {
     if (path === "/api/streamers/bulk" && method === "POST") return apiBulkAddStreamers(ctx);
     if (path === "/api/check" && method === "POST") return apiCheck(ctx);
     if (path === "/api/history" && method === "GET") return apiHistory(ctx);
+    const histMatch = path.match(/^\/api\/history\/([^/]+)$/);
+    if (histMatch && method === "DELETE") {
+      const id = decodeURIComponent(histMatch[1] ?? "");
+      const ok = ctx.store.deleteHistoryEntry(id);
+      return ctx.sendJson(200, { ok });
+    }
     if (path === "/api/test-twitch" && method === "POST") return apiTestTwitch(ctx);
     const match = path.match(/^\/api\/streamers\/([^/]+)$/);
     if (match) {

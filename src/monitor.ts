@@ -228,7 +228,7 @@ export class Monitor {
         state.isLive = false;
 
         // Determinar la hora real de finalización
-        let realEndedAt = new Date().toISOString();
+        let realEndedAt: string | null = null;
 
         // 1. Si es Twitch, consultar la duración exacta del VOD archivado en Twitch
         if (streamer.platform === "twitch") {
@@ -245,11 +245,33 @@ export class Monitor {
         // 2. Si no se obtuvo del VOD y hubo un salto anormal de tiempo
         // (por ejemplo, el bot estuvo apagado/dormido o la API estuvo caída más de 15 min):
         // el directo realmente terminó cerca del último momento en que se le vio en directo (lastLiveAt).
-        if (realEndedAt === new Date().toISOString() && state.lastLiveAt) {
+        if (!realEndedAt && state.lastLiveAt) {
           const lastLiveMs = new Date(state.lastLiveAt).getTime();
           const nowMs = Date.now();
           if (!isNaN(lastLiveMs) && nowMs - lastLiveMs > 15 * 60_000) {
             realEndedAt = new Date(lastLiveMs + 2 * 60_000).toISOString();
+          }
+        }
+
+        if (!realEndedAt) {
+          realEndedAt = new Date().toISOString();
+        }
+
+        // 3. Techo de protección contra duraciones infladas por suspensión del servidor:
+        // Si la duración calculada supera 14 horas y no coincide con un VOD real,
+        // acotamos a la última actividad registrada para evitar falsos directos de 18-20 horas.
+        const startMs = state.startedAt ? new Date(state.startedAt).getTime() : NaN;
+        const endMs = new Date(realEndedAt).getTime();
+        if (!isNaN(startMs) && !isNaN(endMs) && endMs - startMs > 14 * 3600_000) {
+          if (state.lastLiveAt) {
+            const lastMs = new Date(state.lastLiveAt).getTime();
+            if (!isNaN(lastMs) && lastMs > startMs) {
+              realEndedAt = new Date(lastMs + 5 * 60_000).toISOString();
+            } else {
+              realEndedAt = new Date(startMs + 2 * 3600_000).toISOString();
+            }
+          } else {
+            realEndedAt = new Date(startMs + 2 * 3600_000).toISOString();
           }
         }
 
